@@ -82,6 +82,8 @@ npm run dev
 3. Click **“Dev Login (no SSO, no DB)”**.
 4. You’re in as a dev user (admin). You can search by registration number and use the Admin page.
 
+**Admin in dev mode:** User list and app config are stored in MongoDB. Start MongoDB (e.g. `docker run -d -p 27017:27017 mongo:latest`) so Admin user management and config save/load work.
+
 ---
 
 ## Full setup (with Google SSO and MongoDB)
