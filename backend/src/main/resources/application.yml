@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: rc-view-backend
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/rcview}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            # Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET for real SSO; placeholder allows startup in dev mode without them
+            client-id: ${GOOGLE_CLIENT_ID:dev-placeholder}
+            client-secret: ${GOOGLE_CLIENT_SECRET:dev-placeholder}
+            scope: email, profile
+        provider:
+          google:
+            issuer-uri: https://accounts.google.com
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /api
+
+# Vahan external API
+vahan:
+  api:
+    base-url: https://api.cuvora.com/car/partner/vehicle/search/v3
+    #api-key: ${VAHAN_API_KEY:}
+    api-key: e734c0a83bfb4c9ca5db7987d0a1d5a6
+    max-age: 999
+
+# Dev mode: no Google SSO (use /api/dev/login), no audit logging, in-memory cache/config (no MongoDB required)
+app:
+  dev-mode: ${DEV_MODE:false}
+  # App config (stored in DB; these are defaults)
+  jwt:
+    secret: ${JWT_SECRET:rcview-default-secret-key-min-256-bits-for-hs256-please-change-in-production-xyz}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  cache:
+    ttl-days: 3
+  rate-limit:
+    per-second: 5
+    per-day-default: 100
+  super-admin-email: vikas.kumar8@cars24.com
+
+logging:
+  level:
+    org.springframework.security: INFO
+    com.cars24: DEBUG

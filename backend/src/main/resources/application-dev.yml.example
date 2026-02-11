@@ -1,0 +1,21 @@
+# Copy to application-dev.yml or set as env vars
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/rcview
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: YOUR_GOOGLE_CLIENT_ID
+            client-secret: YOUR_GOOGLE_CLIENT_SECRET
+
+vahan:
+  api:
+    api-key: YOUR_VAHAN_API_KEY
+
+app:
+  jwt:
+    secret: your-min-32-char-secret-for-jwt-signing
+  frontend-url: http://localhost:3000
