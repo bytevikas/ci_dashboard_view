@@ -10,7 +10,7 @@ Use **Dev Mode** so you can run with only the **Vahan API key** (no Google OAuth
 
 | What | Where | Example |
 |------|--------|--------|
-| **Vahan API key** (required for search) | Env: `VAHAN_API_KEY` or in `application.yml` under `vahan.api.api-key` | `e734c0a83bfb4c9ca5db7987d0a1d5a6` |
+| **Vahan API key** (required for search) | Env: `VAHAN_API_KEY` or in `application.yml` under `vahan.api.api-key` | (your key) |
 | **Dev mode** (bypass SSO + DB logging) | Env: `DEV_MODE=true` or in `application.yml`: `app.dev-mode: true` | `export DEV_MODE=true` |
 | MongoDB (optional in dev mode for cache; app may still need it to start) | Env: `MONGODB_URI` or `application.yml` → `spring.data.mongodb.uri` | `mongodb://localhost:27017/rcview` |
 
@@ -21,7 +21,7 @@ In `application.yml` you can set:
 # In backend/src/main/resources/application.yml
 vahan:
   api:
-    api-key: e734c0a83bfb4c9ca5db7987d0a1d5a6   # your key
+    api-key: YOUR_VAHAN_API_KEY
 
 app:
   dev-mode: true
@@ -30,7 +30,7 @@ app:
 Or use env vars (no file change):
 
 ```bash
-export VAHAN_API_KEY=e734c0a83bfb4c9ca5db7987d0a1d5a6
+export VAHAN_API_KEY=your-vahan-api-key
 export DEV_MODE=true
 ```
 
