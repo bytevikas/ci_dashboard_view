@@ -55,7 +55,7 @@ export default function Dashboard() {
       setRegistrationNumber(initialQ)
       doSearch(initialQ)
     }
-  }, [initialQ, result, loading, doSearch, setRegistrationNumber])
+  }, [initialQ, doSearch, setRegistrationNumber])
 
   const sections = result?.data ? groupDataBySection(result.data as Record<string, unknown>) : {}
   const sectionIds = Object.keys(sections) as SectionId[]

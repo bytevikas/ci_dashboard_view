@@ -16,9 +16,6 @@ public class ConfigService {
 
     private final AppConfigRepository configRepository;
 
-    @Value("${app.dev-mode:false}")
-    private boolean devMode;
-
     @Value("${app.cache.ttl-days:3}")
     private int defaultCacheTtlDays;
 
@@ -29,7 +26,6 @@ public class ConfigService {
     private int defaultRateLimitPerDay;
 
     public AppConfig getConfig() {
-        if (devMode) return defaultConfig();
         return configRepository.findById(CONFIG_ID)
                 .orElseGet(this::defaultConfig);
     }
@@ -63,7 +59,6 @@ public class ConfigService {
         config.setRateLimitPerDayDefault(rateLimitPerDayDefault);
         config.setUpdatedAt(Instant.now());
         config.setUpdatedBy(updatedBy);
-        if (devMode) return config;
         return configRepository.save(config);
     }
 }
