@@ -31,7 +31,6 @@ export async function api<T>(
     });
   } catch (err) {
     clearTimeout(timeoutId);
-    // Handle network errors, timeouts, etc.
     if (err instanceof Error) {
       if (err.name === 'AbortError') {
         return { status: 0, error: 'Request timeout - please check your connection and try again' };

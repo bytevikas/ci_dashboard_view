@@ -10,7 +10,7 @@ export default function Login() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FCF9F6]">
+      <div className="min-h-screen flex items-center justify-center bg-appBg">
         <p className="text-slate-600">Loading...</p>
       </div>
     )
@@ -38,13 +38,13 @@ export default function Login() {
       } else {
         setDevLoginError('Invalid response')
       }
-    } catch (e) {
+    } catch {
       setDevLoginError('Backend not reachable. Is it running on port 8080?')
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FCF9F6] px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-appBg px-4">
       <div className="w-full max-w-md text-center">
         <div className="mb-8 text-primary bg-pastelPurple p-4 rounded-3xl inline-flex">
           <span className="material-symbols-outlined text-5xl filled-icon">directions_car</span>

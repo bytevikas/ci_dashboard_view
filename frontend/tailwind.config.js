@@ -5,7 +5,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#7C3AED',
+        primary: '#363C6D',
+        appBg: '#FCF9F6',
         accent: '#FF8C94',
         pastelBlue: '#E0F2FE',
         pastelGreen: '#DCFCE7',

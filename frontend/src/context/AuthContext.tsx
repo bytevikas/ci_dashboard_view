@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { api, UserInfo } from '../api/client';
 
 type AuthContextType = {
@@ -11,9 +12,8 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
-  // Start false so login shows immediately when there's no token; only true while checking /auth/me
   const [loading, setLoading] = useState(false);
 
   const refreshUser = useCallback(async () => {
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
-  // Safety: if still loading after 10s, clear and show login (backend down or fetch broken)
+  // Stop loading after 10s if /auth/me never completes (e.g. backend down)
   useEffect(() => {
     if (!loading) return;
     const t = setTimeout(() => {

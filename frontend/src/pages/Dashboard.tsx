@@ -55,7 +55,7 @@ export default function Dashboard() {
       setRegistrationNumber(initialQ)
       doSearch(initialQ)
     }
-  }, [initialQ])
+  }, [initialQ, result, loading, doSearch, setRegistrationNumber])
 
   const sections = result?.data ? groupDataBySection(result.data as Record<string, unknown>) : {}
   const sectionIds = Object.keys(sections) as SectionId[]
@@ -96,7 +96,6 @@ export default function Dashboard() {
 
         {result?.success && result.data && (
           <>
-            {/* Compact header banner */}
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -126,9 +125,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Quick search and filter tabs */}
             <div className="flex flex-col gap-4 mb-6">
-              {/* Field search - full width */}
               <div className="relative w-full max-w-md">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
                 <input
@@ -148,7 +145,6 @@ export default function Dashboard() {
                   </button>
                 )}
               </div>
-              {/* Section tabs - full width row */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -178,7 +174,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Data sections - two column grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {sectionIds.map((sectionId) => {
                 if (activeFilter !== 'all' && activeFilter !== sectionId && !fieldSearch) return null
