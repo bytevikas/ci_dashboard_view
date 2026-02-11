@@ -12,7 +12,7 @@ function PrivateRoute({ children, adminOnly }: { children: React.ReactNode; admi
   const navigate = useNavigate()
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#FCF9F6]">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-appBg">
         <p className="text-slate-600">Loading...</p>
         <button
           type="button"

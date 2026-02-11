@@ -37,10 +37,5 @@ export function useRecentSearches() {
     })
   }, [])
 
-  const clearAll = useCallback(() => {
-    setRecentSearches([])
-    localStorage.removeItem(STORAGE_KEY)
-  }, [])
-
-  return { recentSearches, addSearch, removeSearch, clearAll }
+  return { recentSearches, addSearch, removeSearch }
 }

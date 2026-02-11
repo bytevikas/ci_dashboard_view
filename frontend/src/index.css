@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-[#FCF9F6] text-slate-800 antialiased font-sans;
+    @apply bg-appBg text-slate-800 antialiased font-sans;
   }
 }
 

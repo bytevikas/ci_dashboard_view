@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { SECTION_LABELS, labelForKey, formatValue } from '../utils/vehicleSections'
 import type { SectionId } from '../utils/vehicleSections'
 
@@ -12,15 +13,15 @@ const SECTION_ICONS: Record<string, string> = {
   other: 'more_horiz',
 }
 
-const SECTION_BG_CLASS: Record<string, string> = {
-  owner: 'bg-pastelPurple text-primary',
-  rc: 'bg-pastelGreen text-green-600',
-  vehicle: 'bg-pastelBlue text-blue-600',
-  insurance: 'bg-pastelOrange text-orange-600',
-  puc: 'bg-pastelGreen text-green-600',
-  loan: 'bg-pastelPurple text-primary',
-  permit: 'bg-pastelBlue text-blue-600',
-  other: 'bg-slate-100 text-slate-600',
+const SECTION_STYLES: Record<string, { icon: string; header: string }> = {
+  owner: { icon: 'bg-pastelPurple text-primary', header: 'bg-pastelPurple/10' },
+  rc: { icon: 'bg-pastelGreen text-green-600', header: 'bg-pastelGreen/10' },
+  vehicle: { icon: 'bg-pastelBlue text-blue-600', header: 'bg-pastelBlue/10' },
+  insurance: { icon: 'bg-pastelOrange text-orange-600', header: 'bg-pastelOrange/10' },
+  puc: { icon: 'bg-pastelGreen text-green-600', header: 'bg-pastelGreen/10' },
+  loan: { icon: 'bg-pastelPurple text-primary', header: 'bg-pastelPurple/10' },
+  permit: { icon: 'bg-pastelBlue text-blue-600', header: 'bg-pastelBlue/10' },
+  other: { icon: 'bg-slate-100 text-slate-600', header: 'bg-slate-100' },
 }
 
 type Props = {
@@ -29,12 +30,12 @@ type Props = {
   highlightTerm?: string
 }
 
-function highlightText(text: string, term: string): React.ReactNode {
+function highlightText(text: string, term: string): ReactNode {
   if (!term) return text
-  const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
-  const parts = text.split(regex)
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
   return parts.map((part, i) =>
-    regex.test(part) ? (
+    i % 2 === 1 ? (
       <mark key={i} className="bg-yellow-200 text-slate-900 px-0.5 rounded">{part}</mark>
     ) : (
       part
@@ -45,18 +46,16 @@ function highlightText(text: string, term: string): React.ReactNode {
 export default function VehicleResult({ sectionId, data, highlightTerm }: Props) {
   const label = SECTION_LABELS[sectionId] ?? sectionId
   const icon = SECTION_ICONS[sectionId] ?? 'info'
-  const bgClass = SECTION_BG_CLASS[sectionId] ?? 'bg-slate-100 text-slate-600'
+  const style = SECTION_STYLES[sectionId] ?? { icon: 'bg-slate-100 text-slate-600', header: 'bg-slate-100' }
 
   return (
     <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      {/* Section header */}
-      <div className={`flex items-center gap-3 px-5 py-4 border-b border-slate-100 ${bgClass.replace('text-', 'bg-').split(' ')[0]}/10`}>
-        <div className={`w-10 h-10 flex items-center justify-center rounded-xl ${bgClass}`}>
+      <div className={`flex items-center gap-3 px-5 py-4 border-b border-slate-100 ${style.header}`}>
+        <div className={`w-10 h-10 flex items-center justify-center rounded-xl ${style.icon}`}>
           <span className="material-symbols-outlined text-xl filled-icon">{icon}</span>
         </div>
         <h3 className="text-lg font-bold text-slate-800">{label}</h3>
       </div>
-      {/* Data table */}
       <div className="divide-y divide-slate-100">
         {Object.entries(data).map(([key, value]) => (
           <div key={key} className="flex flex-col sm:flex-row sm:items-center px-5 py-3 hover:bg-slate-50 transition-colors">
