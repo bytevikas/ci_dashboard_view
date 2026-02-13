@@ -18,19 +18,18 @@ spring:
             issuer-uri: https://accounts.google.com
 
 server:
-  port: ${PORT:8080}
+  port: ${PORT:8081}
   servlet:
     context-path: /api
 
-# Vahan external API
+# Vahan external API (required for vehicle search)
 vahan:
   api:
     base-url: https://api.cuvora.com/car/partner/vehicle/search/v3
-    #api-key: ${VAHAN_API_KEY:}
-    api-key: e734c0a83bfb4c9ca5db7987d0a1d5a6
+    api-key: ${VAHAN_API_KEY:}
     max-age: 999
 
-# Dev mode: no Google SSO (use /api/dev/login), no audit logging, in-memory cache/config (no MongoDB required)
+# Dev mode: no Google SSO (use /api/dev/login), no audit logging, in-memory vehicle cache. MongoDB is still used for Admin (users + config).
 app:
   dev-mode: ${DEV_MODE:false}
   # App config (stored in DB; these are defaults)

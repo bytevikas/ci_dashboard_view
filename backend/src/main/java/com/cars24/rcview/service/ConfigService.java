@@ -2,19 +2,30 @@ package com.cars24.rcview.service;
 
 import com.cars24.rcview.entity.AppConfig;
 import com.cars24.rcview.repository.AppConfigRepository;
-import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 
 @Service
-@RequiredArgsConstructor
 public class ConfigService {
 
+    private static final Logger log = LoggerFactory.getLogger(ConfigService.class);
     private static final String CONFIG_ID = "global";
 
     private final AppConfigRepository configRepository;
+
+    /** In-memory cache — avoids a MongoDB round-trip on every request. */
+    private volatile AppConfig cachedConfig;
+
+    /** Set after the first DB failure so subsequent calls use defaults instantly. */
+    private volatile boolean dbUnavailable;
+
+    public ConfigService(AppConfigRepository configRepository) {
+        this.configRepository = configRepository;
+    }
 
     @Value("${app.cache.ttl-days:3}")
     private int defaultCacheTtlDays;
@@ -26,8 +37,26 @@ public class ConfigService {
     private int defaultRateLimitPerDay;
 
     public AppConfig getConfig() {
-        return configRepository.findById(CONFIG_ID)
-                .orElseGet(this::defaultConfig);
+        AppConfig c = cachedConfig;
+        if (c != null) return c;
+        synchronized (this) {
+            c = cachedConfig;
+            if (c != null) return c;
+            if (dbUnavailable) {
+                c = defaultConfig();
+                cachedConfig = c;
+                return c;
+            }
+            try {
+                c = configRepository.findById(CONFIG_ID).orElseGet(this::defaultConfig);
+            } catch (Exception e) {
+                log.warn("MongoDB unavailable for config — using defaults: {}", e.getMessage());
+                dbUnavailable = true;
+                c = defaultConfig();
+            }
+            cachedConfig = c;
+            return c;
+        }
     }
 
     private AppConfig defaultConfig() {
@@ -59,6 +88,16 @@ public class ConfigService {
         config.setRateLimitPerDayDefault(rateLimitPerDayDefault);
         config.setUpdatedAt(Instant.now());
         config.setUpdatedBy(updatedBy);
-        return configRepository.save(config);
+        try {
+            AppConfig saved = configRepository.save(config);
+            cachedConfig = saved;
+            dbUnavailable = false;
+            return saved;
+        } catch (Exception e) {
+            log.warn("MongoDB unavailable – config saved in-memory only: {}", e.getMessage());
+            dbUnavailable = true;
+            cachedConfig = config;
+            return config;
+        }
     }
 }

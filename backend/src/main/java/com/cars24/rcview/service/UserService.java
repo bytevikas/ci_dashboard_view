@@ -4,16 +4,18 @@ import com.cars24.rcview.dto.UserInfoDto;
 import com.cars24.rcview.entity.AppUser;
 import com.cars24.rcview.repository.AppUserRepository;
 import com.cars24.rcview.security.CustomOAuth2User;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
     private final AppUserRepository userRepository;
+
+    public UserService(AppUserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     public UserInfoDto getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();

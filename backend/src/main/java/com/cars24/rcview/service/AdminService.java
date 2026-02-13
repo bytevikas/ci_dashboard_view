@@ -6,7 +6,6 @@ import com.cars24.rcview.entity.AuditLog;
 import com.cars24.rcview.repository.AppUserRepository;
 import com.cars24.rcview.repository.AuditLogRepository;
 import com.cars24.rcview.security.CustomOAuth2User;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,12 +17,17 @@ import java.time.Instant;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class AdminService {
 
     private final AppUserRepository userRepository;
     private final AuditLogRepository auditLogRepository;
     private final ConfigService configService;
+
+    public AdminService(AppUserRepository userRepository, AuditLogRepository auditLogRepository, ConfigService configService) {
+        this.userRepository = userRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.configService = configService;
+    }
 
     @Value("${app.super-admin-email:vikas.kumar8@cars24.com}")
     private String superAdminEmail;
@@ -39,13 +43,15 @@ public class AdminService {
     }
 
     public List<AppUser> listUsers(String search) {
+        List<AppUser> all = userRepository.findAll();
         if (search != null && !search.isBlank()) {
-            return userRepository.findAll().stream()
-                    .filter(u -> u.getEmail().toLowerCase().contains(search.toLowerCase())
-                            || (u.getName() != null && u.getName().toLowerCase().contains(search.toLowerCase())))
+            String q = search.toLowerCase();
+            return all.stream()
+                    .filter(u -> (u.getEmail() != null && u.getEmail().toLowerCase().contains(q))
+                            || (u.getName() != null && u.getName().toLowerCase().contains(q)))
                     .toList();
         }
-        return userRepository.findAll();
+        return all;
     }
 
     public AppUser addOrEnableUser(String email, String name, boolean ssoEnabled) {

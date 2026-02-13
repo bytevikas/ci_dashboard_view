@@ -1,4 +1,6 @@
 /Users/a40811/Documents/GitHub/ci_api_view/backend/src/main/java/com/cars24/rcview/RcViewApplication.java
+/Users/a40811/Documents/GitHub/ci_api_view/backend/src/main/java/com/cars24/rcview/config/GlobalExceptionHandler.java
+/Users/a40811/Documents/GitHub/ci_api_view/backend/src/main/java/com/cars24/rcview/config/MongoConfig.java
 /Users/a40811/Documents/GitHub/ci_api_view/backend/src/main/java/com/cars24/rcview/config/RestTemplateConfig.java
 /Users/a40811/Documents/GitHub/ci_api_view/backend/src/main/java/com/cars24/rcview/config/SecurityConfig.java
 /Users/a40811/Documents/GitHub/ci_api_view/backend/src/main/java/com/cars24/rcview/controller/AdminController.java
