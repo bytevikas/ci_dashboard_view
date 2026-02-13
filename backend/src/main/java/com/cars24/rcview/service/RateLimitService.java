@@ -1,49 +1,51 @@
 package com.cars24.rcview.service;
 
+import com.cars24.rcview.entity.AuditLog.AuditAction;
+import com.cars24.rcview.repository.AuditLogRepository;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Refill;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@RequiredArgsConstructor
 public class RateLimitService {
 
     private final ConfigService configService;
-    private final com.cars24.rcview.repository.AuditLogRepository auditLogRepository;
+    private final AuditLogRepository auditLogRepository;
 
-    @org.springframework.beans.factory.annotation.Value("${app.dev-mode:false}")
+    @Value("${app.dev-mode:false}")
     private boolean devMode;
 
     private final Map<String, Bucket> perUserBuckets = new ConcurrentHashMap<>();
+    private final Map<String, Instant> lastSearchTime = new ConcurrentHashMap<>();
+
+    /** Minimum interval between search requests per user (prevents abuse from DevTools / curl). */
+    private static final long SEARCH_COOLDOWN_MS = 2000;
+
+    private static final List<AuditAction> DAILY_LIMIT_ACTIONS = List.of(
+            AuditAction.SEARCH, AuditAction.CACHE_HIT, AuditAction.API_CALL);
+
+    public RateLimitService(ConfigService configService, AuditLogRepository auditLogRepository) {
+        this.configService = configService;
+        this.auditLogRepository = auditLogRepository;
+    }
 
     public boolean allowRequest(String userId) {
         Bucket bucket = perUserBuckets.computeIfAbsent(userId, k -> createBucket());
         return bucket.tryConsume(1);
     }
 
-    private Bucket createBucket() {
-        int perSecond = Math.max(1, configService.getRateLimitPerSecond());
-        Bandwidth limit = Bandwidth.classic(perSecond, Refill.greedy(perSecond, Duration.ofSeconds(1)));
-        return Bucket.builder().addLimit(limit).build();
-    }
-
-    /** Actions that count toward the daily search limit (every search attempt that consumes the limit). */
-    private static final List<com.cars24.rcview.entity.AuditLog.AuditAction> DAILY_LIMIT_ACTIONS = List.of(
-            com.cars24.rcview.entity.AuditLog.AuditAction.SEARCH,
-            com.cars24.rcview.entity.AuditLog.AuditAction.CACHE_HIT,
-            com.cars24.rcview.entity.AuditLog.AuditAction.API_CALL);
-
     public boolean withinDailyLimit(String userId) {
         if (devMode) return true;
         int limit = configService.getRateLimitPerDayDefault();
-        var since = java.time.Instant.now().minus(java.time.Duration.ofDays(1));
+        Instant since = Instant.now().minus(Duration.ofDays(1));
         long count = auditLogRepository.countByUserIdAndActionInAndCreatedAtAfter(userId, DAILY_LIMIT_ACTIONS, since);
         return count < limit;
     }
@@ -51,8 +53,28 @@ public class RateLimitService {
     public long getRemainingDailyCount(String userId) {
         if (devMode) return 999L;
         int limit = configService.getRateLimitPerDayDefault();
-        var since = java.time.Instant.now().minus(java.time.Duration.ofDays(1));
+        Instant since = Instant.now().minus(Duration.ofDays(1));
         long count = auditLogRepository.countByUserIdAndActionInAndCreatedAtAfter(userId, DAILY_LIMIT_ACTIONS, since);
         return Math.max(0, limit - count);
+    }
+
+    /**
+     * Returns true if enough time has passed since this user's last search.
+     * Enforces a mandatory cooldown even for users calling the API directly.
+     */
+    public boolean searchCooldownPassed(String userId) {
+        Instant now = Instant.now();
+        Instant last = lastSearchTime.get(userId);
+        if (last != null && Duration.between(last, now).toMillis() < SEARCH_COOLDOWN_MS) {
+            return false;
+        }
+        lastSearchTime.put(userId, now);
+        return true;
+    }
+
+    private Bucket createBucket() {
+        int perSecond = Math.max(1, configService.getRateLimitPerSecond());
+        Bandwidth limit = Bandwidth.classic(perSecond, Refill.greedy(perSecond, Duration.ofSeconds(1)));
+        return Bucket.builder().addLimit(limit).build();
     }
 }

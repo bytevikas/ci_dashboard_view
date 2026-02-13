@@ -5,14 +5,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#363C6D',
-        appBg: '#FCF9F6',
-        accent: '#FF8C94',
-        pastelBlue: '#E0F2FE',
+        primary: '#F26522',       // Cars24 orange
+        dark: '#192B5D',          // Cars24 / CarInfo navy
+        accent: '#E84C3D',        // warm red for destructive actions
+        teal: '#00B8C2',          // CarInfo teal accent
+        appBg: '#FFF9F5',         // warm off-white
+        pastelBlue: '#E0F7F7',    // light teal tint
         pastelGreen: '#DCFCE7',
         pastelOrange: '#FFEDD5',
-        pastelPurple: '#F3E8FF',
-        softPeach: '#FFF1F2',
+        pastelBrand: '#FFF0E6',   // light orange tint (brand pastel)
+        softPeach: '#FFF4ED',
       },
       fontFamily: {
         sans: ['Quicksand', 'sans-serif'],

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 
 type UserRow = {
@@ -34,12 +34,20 @@ export default function Admin() {
 
   const loadUsers = useCallback(async () => {
     const q = search ? `?search=${encodeURIComponent(search)}` : ''
-    const { data } = await api<UserRow[]>(`/admin/users${q}`)
+    const { data, error } = await api<UserRow[]>(`/admin/users${q}`)
+    if (error) {
+      showMsg('err', error)
+      return
+    }
     if (data) setUsers(data)
   }, [search])
 
   const loadConfig = useCallback(async () => {
-    const { data } = await api<AppConfig>('/admin/config')
+    const { data, error } = await api<AppConfig>('/admin/config')
+    if (error) {
+      showMsg('err', error)
+      return
+    }
     if (data) {
       setConfig(data)
       setConfigForm({
@@ -50,6 +58,7 @@ export default function Admin() {
     }
   }, [])
 
+  // Initial load
   useEffect(() => {
     let cancelled = false
     async function run() {
@@ -59,9 +68,15 @@ export default function Admin() {
     }
     run()
     return () => { cancelled = true }
-  }, [loadUsers, loadConfig])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Debounced search (skip initial mount — handled by initial load above)
+  const searchMountedRef = useRef(false)
   useEffect(() => {
+    if (!searchMountedRef.current) {
+      searchMountedRef.current = true
+      return
+    }
     const t = setTimeout(loadUsers, 300)
     return () => clearTimeout(t)
   }, [search, loadUsers])

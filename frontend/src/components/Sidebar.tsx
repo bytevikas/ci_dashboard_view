@@ -11,7 +11,7 @@ export default function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-full w-20 bg-white border-r border-gray-100 flex flex-col items-center py-8 z-50 hidden md:flex">
-      <div className="mb-12 text-primary bg-pastelPurple p-3 rounded-2xl">
+      <div className="mb-12 text-primary bg-pastelBrand p-3 rounded-2xl">
         <span className="material-symbols-outlined text-3xl filled-icon">directions_car</span>
       </div>
       <nav className="flex flex-col gap-10 flex-1">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, VehicleSearchResponse } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -12,38 +12,48 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQ = searchParams.get('q') ?? ''
-  const { setRegistrationNumber, setOnSearch, setSearchLoading } = useSearch()
+  const { setRegistrationNumber, setOnSearch, setSearchLoading, refreshRateLimit } = useSearch()
   const [result, setResult] = useState<VehicleSearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [activeFilter, setActiveFilter] = useState<SectionId | 'all'>('all')
   const [fieldSearch, setFieldSearch] = useState('')
 
+  const searchInFlightRef = useRef(false)
+
   const doSearch = useCallback(async (regNo: string) => {
-    if (!regNo.trim()) return
-    setSearchLoading(true)
-    setLoading(true)
-    setResult(null)
-    setSearchParams({ q: regNo.trim() })
-    setRegistrationNumber(regNo.trim())
+    if (!regNo.trim() || searchInFlightRef.current) return
+    searchInFlightRef.current = true
+    try {
+      setSearchLoading(true)
+      setLoading(true)
+      setResult(null)
+      setSearchParams({ q: regNo.trim() })
+      setRegistrationNumber(regNo.trim())
 
-    const { data, status, error } = await api<VehicleSearchResponse>('/vehicle/search', {
-      method: 'POST',
-      body: JSON.stringify({ registrationNumber: regNo.trim() }),
-    })
-
-    setLoading(false)
-    setSearchLoading(false)
-    if (data) {
-      setResult(data)
-      trackSearch(regNo.trim(), data.success, data.fromCache ?? false)
-    } else {
-      setResult({
-        success: false,
-        errorMessage: error || (status === 429 ? 'Too many requests. Please try again later.' : 'Search failed.'),
+      const { data, status, error } = await api<VehicleSearchResponse>('/vehicle/search', {
+        method: 'POST',
+        body: JSON.stringify({ registrationNumber: regNo.trim() }),
+        timeout: 45000, // external Vahan API can be slow
       })
-      trackSearch(regNo.trim(), false, false)
+
+      if (data) {
+        setResult(data)
+        trackSearch(regNo.trim(), data.success, data.fromCache ?? false)
+      } else {
+        setResult({
+          success: false,
+          errorMessage: error || (status === 429 ? 'Too many requests. Please try again later.' : 'Search failed.'),
+        })
+        trackSearch(regNo.trim(), false, false)
+      }
+      // Refresh remaining daily searches after each attempt
+      refreshRateLimit()
+    } finally {
+      setLoading(false)
+      setSearchLoading(false)
+      searchInFlightRef.current = false
     }
-  }, [setSearchParams, setSearchLoading, setRegistrationNumber])
+  }, [setSearchParams, setSearchLoading, setRegistrationNumber, refreshRateLimit])
 
   useEffect(() => {
     setOnSearch(() => doSearch)

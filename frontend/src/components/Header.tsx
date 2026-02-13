@@ -5,7 +5,7 @@ import { useSearch } from '../context/SearchContext'
 import { useRecentSearches } from '../hooks/useRecentSearches'
 
 export default function Header() {
-  const { registrationNumber, setRegistrationNumber, onSearch, searchLoading } = useSearch()
+  const { registrationNumber, setRegistrationNumber, onSearch, searchLoading, remainingSearches, dailyLimit } = useSearch()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const { recentSearches, addSearch, removeSearch } = useRecentSearches()
@@ -96,6 +96,21 @@ export default function Header() {
           )}
         </div>
         <div className="flex items-center gap-4">
+          {remainingSearches !== null && dailyLimit !== null && (
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                remainingSearches > 20
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : remainingSearches > 5
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-red-50 text-red-700'
+              }`}
+              title={`${remainingSearches} of ${dailyLimit} searches remaining today`}
+            >
+              <span className="material-symbols-outlined text-sm">bolt</span>
+              {remainingSearches}/{dailyLimit} left today
+            </div>
+          )}
           {user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN' ? (
             <button
               type="button"
@@ -115,16 +130,17 @@ export default function Header() {
               if (trimmed && onSearch) onSearch(trimmed)
             }}
             disabled={searchLoading || !registrationNumber.trim()}
-            className="bg-primary text-white px-6 py-2.5 rounded-2xl font-semibold hover:shadow-lg hover:shadow-primary/25 transition-all disabled:opacity-50"
+            className="bg-primary text-white px-6 py-2.5 rounded-2xl font-semibold hover:brightness-110 hover:shadow-lg hover:shadow-primary/25 transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed"
           >
             {searchLoading ? 'Searching...' : 'Search Now'}
           </button>
           <button
             type="button"
             onClick={() => logout()}
-            className="text-slate-500 hover:text-slate-700 text-sm"
+            className="flex items-center gap-1.5 text-slate-500 hover:text-accent hover:bg-red-50 px-3 py-2 rounded-xl text-sm font-medium transition-colors"
             title="Logout"
           >
+            <span className="material-symbols-outlined text-base">logout</span>
             Logout
           </button>
         </div>

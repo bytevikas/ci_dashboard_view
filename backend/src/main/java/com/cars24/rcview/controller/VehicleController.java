@@ -1,10 +1,11 @@
 package com.cars24.rcview.controller;
 
 import com.cars24.rcview.dto.VehicleSearchResponse;
+import com.cars24.rcview.entity.AppConfig;
+import com.cars24.rcview.service.ConfigService;
 import com.cars24.rcview.service.RateLimitService;
 import com.cars24.rcview.service.UserService;
 import com.cars24.rcview.service.VehicleSearchService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,12 +13,20 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/vehicle")
-@RequiredArgsConstructor
 public class VehicleController {
 
     private final VehicleSearchService vehicleSearchService;
     private final UserService userService;
     private final RateLimitService rateLimitService;
+    private final ConfigService configService;
+
+    public VehicleController(VehicleSearchService vehicleSearchService, UserService userService,
+                             RateLimitService rateLimitService, ConfigService configService) {
+        this.vehicleSearchService = vehicleSearchService;
+        this.userService = userService;
+        this.rateLimitService = rateLimitService;
+        this.configService = configService;
+    }
 
     @PostMapping("/search")
     public ResponseEntity<VehicleSearchResponse> search(@RequestBody Map<String, String> body) {
@@ -45,6 +54,13 @@ public class VehicleController {
             return ResponseEntity.status(401).build();
         }
         long remaining = rateLimitService.getRemainingDailyCount(user.getId());
-        return ResponseEntity.ok(Map.of("remainingSearchesToday", remaining));
+        AppConfig config = configService.getConfig();
+        // updatedBy is only set when an admin explicitly saves the config
+        boolean adminConfigured = config.getUpdatedBy() != null;
+        return ResponseEntity.ok(Map.of(
+                "remainingSearchesToday", remaining,
+                "dailyLimit", config.getRateLimitPerDayDefault(),
+                "adminConfigured", adminConfigured
+        ));
     }
 }

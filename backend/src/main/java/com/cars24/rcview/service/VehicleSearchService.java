@@ -1,29 +1,25 @@
 package com.cars24.rcview.service;
 
+import com.cars24.rcview.dto.VehicleSearchResponse;
 import com.cars24.rcview.entity.AuditLog;
 import com.cars24.rcview.entity.VehicleCache;
 import com.cars24.rcview.repository.AuditLogRepository;
 import com.cars24.rcview.repository.VehicleCacheRepository;
 import com.cars24.rcview.security.CustomOAuth2User;
-import com.cars24.rcview.dto.VehicleSearchResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-
-import org.springframework.beans.factory.annotation.Value;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@RequiredArgsConstructor
 public class VehicleSearchService {
 
     private final VehicleCacheRepository cacheRepository;
@@ -31,6 +27,14 @@ public class VehicleSearchService {
     private final VahanApiClient vahanApiClient;
     private final ConfigService configService;
     private final RateLimitService rateLimitService;
+
+    public VehicleSearchService(VehicleCacheRepository cacheRepository, AuditLogRepository auditLogRepository, VahanApiClient vahanApiClient, ConfigService configService, RateLimitService rateLimitService) {
+        this.cacheRepository = cacheRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.vahanApiClient = vahanApiClient;
+        this.configService = configService;
+        this.rateLimitService = rateLimitService;
+    }
 
     @Value("${app.dev-mode:false}")
     private boolean devMode;
@@ -67,6 +71,13 @@ public class VehicleSearchService {
             return VehicleSearchResponse.builder()
                     .success(false)
                     .errorMessage("Too many requests. Please slow down.")
+                    .build();
+        }
+
+        if (!rateLimitService.searchCooldownPassed(userId)) {
+            return VehicleSearchResponse.builder()
+                    .success(false)
+                    .errorMessage("Please wait a moment before searching again.")
                     .build();
         }
 
@@ -108,7 +119,6 @@ public class VehicleSearchService {
                         .userEmail(userEmail)
                         .action(AuditLog.AuditAction.CACHE_HIT)
                         .registrationNumber(normalized)
-                        .fromCache(true)
                         .createdAt(now)
                         .build());
                 return VehicleSearchResponse.builder()
@@ -120,15 +130,22 @@ public class VehicleSearchService {
             }
         }
 
-        Optional<JsonNode> apiResponse = vahanApiClient.search(registrationNumber.trim());
-        if (apiResponse.isEmpty()) {
+        VahanSearchResult apiResult = vahanApiClient.search(registrationNumber.trim());
+        if (apiResult.getErrorMessage() != null) {
+            return VehicleSearchResponse.builder()
+                    .success(false)
+                    .fromCache(false)
+                    .registrationNumber(normalized)
+                    .errorMessage(apiResult.getErrorMessage())
+                    .build();
+        }
+        if (apiResult.getData().isEmpty()) {
             if (!devMode) {
                 auditLogRepository.save(AuditLog.builder()
                         .userId(userId)
                         .userEmail(userEmail)
                         .action(AuditLog.AuditAction.SEARCH)
                         .registrationNumber(normalized)
-                        .fromCache(false)
                         .details("NO_DATA")
                         .createdAt(now)
                         .build());
@@ -137,11 +154,11 @@ public class VehicleSearchService {
                     .success(false)
                     .fromCache(false)
                     .registrationNumber(normalized)
-                    .errorMessage("No data found for this registration number")
+                    .errorMessage("No data found for this registration number. The number may be invalid or not in the Vahan database.")
                     .build();
         }
 
-        JsonNode root = apiResponse.get();
+        JsonNode root = apiResult.getData().get();
         // API returns data at root.data, not root.response.data
         JsonNode dataNode = root.path("data");
         if (dataNode.isMissingNode() || !dataNode.isObject()) {
@@ -169,7 +186,6 @@ public class VehicleSearchService {
                     .userEmail(userEmail)
                     .action(AuditLog.AuditAction.API_CALL)
                     .registrationNumber(normalized)
-                    .fromCache(false)
                     .createdAt(now)
                     .build());
         }
@@ -179,7 +195,6 @@ public class VehicleSearchService {
                 .fromCache(false)
                 .registrationNumber(normalized)
                 .data(dataMap)
-                .rawResponse(root)
                 .build();
     }
 
