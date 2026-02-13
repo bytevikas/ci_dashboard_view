@@ -29,24 +29,29 @@ export default function Login() {
     try {
       const res = await fetch(API_BASE + '/dev/login', { credentials: 'include' })
       if (!res.ok) {
-        setDevLoginError('Dev login not available (start backend with DEV_MODE=true)')
+        if (res.status === 404) {
+          setDevLoginError('Dev login is disabled. Start backend with DEV_MODE=true (see RUN.md).')
+        } else {
+          setDevLoginError(`Request failed (${res.status}). Check backend is running with DEV_MODE=true.`)
+        }
         return
       }
-      const data = await res.json()
+      const text = await res.text()
+      const data = text ? (() => { try { return JSON.parse(text) } catch { return null } })() : null
       if (data?.token) {
         setToken(data.token)
       } else {
-        setDevLoginError('Invalid response')
+        setDevLoginError('Invalid response from server')
       }
     } catch {
-      setDevLoginError('Backend not reachable. Is it running on port 8080?')
+      setDevLoginError('Backend not reachable. Is it running? Start with DEV_MODE=true (see RUN.md).')
     }
   }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-appBg px-4">
       <div className="w-full max-w-md text-center">
-        <div className="mb-8 text-primary bg-pastelPurple p-4 rounded-3xl inline-flex">
+        <div className="mb-8 text-primary bg-pastelBrand p-4 rounded-3xl inline-flex">
           <span className="material-symbols-outlined text-5xl filled-icon">directions_car</span>
         </div>
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Vehicle Health Report</h1>
@@ -54,7 +59,7 @@ export default function Login() {
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-primary/50 hover:bg-pastelPurple/30 text-slate-800 font-semibold px-6 py-4 rounded-2xl transition-all card-shadow"
+          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-primary/50 hover:bg-pastelBrand/30 text-slate-800 font-semibold px-6 py-4 rounded-2xl transition-all card-shadow"
         >
           <svg className="w-6 h-6" viewBox="0 0 24 24">
             <path

@@ -2,10 +2,7 @@ package com.cars24.rcview.controller;
 
 import com.cars24.rcview.entity.AppConfig;
 import com.cars24.rcview.entity.AppUser;
-import com.cars24.rcview.entity.AuditLog;
 import com.cars24.rcview.service.AdminService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -19,28 +16,35 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/admin")
-@RequiredArgsConstructor
 public class AdminController {
 
     private final AdminService adminService;
 
+    public AdminController(AdminService adminService) {
+        this.adminService = adminService;
+    }
+
     @GetMapping("/users")
-    public ResponseEntity<List<Map<String, Object>>> listUsers(
-            @RequestParam(required = false) String search) {
-        List<AppUser> users = adminService.listUsers(search);
-        List<Map<String, Object>> dtos = users.stream()
-                .map(u -> {
-                    Map<String, Object> m = new HashMap<>();
-                    m.put("id", u.getId());
-                    m.put("email", u.getEmail());
-                    m.put("name", u.getName());
-                    m.put("role", u.getRole().name());
-                    m.put("ssoEnabled", u.isSsoEnabled());
-                    m.put("createdAt", u.getCreatedAt());
-                    return m;
-                })
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(dtos);
+    public ResponseEntity<?> listUsers(
+            @RequestParam(value = "search", required = false) String search) {
+        try {
+            List<AppUser> users = adminService.listUsers(search);
+            List<Map<String, Object>> dtos = users.stream()
+                    .map(u -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("id", u.getId() != null ? u.getId() : "");
+                        m.put("email", u.getEmail() != null ? u.getEmail() : "");
+                        m.put("name", u.getName());
+                        m.put("role", u.getRole() != null ? u.getRole().name() : "USER");
+                        m.put("ssoEnabled", u.isSsoEnabled());
+                        m.put("createdAt", u.getCreatedAt());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(dtos);
+        } catch (Exception e) {
+            return mongoUnavailable();
+        }
     }
 
     @PostMapping("/users")
@@ -62,6 +66,8 @@ public class AdminController {
             ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return mongoUnavailable();
         }
     }
 
@@ -72,6 +78,8 @@ public class AdminController {
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return mongoUnavailable();
         }
     }
 
@@ -96,28 +104,48 @@ public class AdminController {
             ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return mongoUnavailable();
         }
     }
 
     @GetMapping("/config")
-    public ResponseEntity<AppConfig> getConfig() {
-        return ResponseEntity.ok(adminService.getConfig());
+    public ResponseEntity<?> getConfig() {
+        try {
+            return ResponseEntity.ok(adminService.getConfig());
+        } catch (Exception e) {
+            return mongoUnavailable();
+        }
     }
 
     @PutMapping("/config")
-    public ResponseEntity<AppConfig> updateConfig(@RequestBody Map<String, Integer> body) {
+    public ResponseEntity<?> updateConfig(@RequestBody Map<String, Integer> body) {
         int cacheTtlDays = body.getOrDefault("cacheTtlDays", 3);
         int rateLimitPerSecond = body.getOrDefault("rateLimitPerSecond", 5);
         int rateLimitPerDayDefault = body.getOrDefault("rateLimitPerDayDefault", 100);
-        AppConfig config = adminService.updateConfig(cacheTtlDays, rateLimitPerSecond, rateLimitPerDayDefault);
-        return ResponseEntity.ok(config);
+        try {
+            AppConfig config = adminService.updateConfig(cacheTtlDays, rateLimitPerSecond, rateLimitPerDayDefault);
+            return ResponseEntity.ok(config);
+        } catch (Exception e) {
+            return mongoUnavailable();
+        }
     }
 
     @GetMapping("/audit-logs")
-    public ResponseEntity<Page<AuditLog>> getAuditLogs(
+    public ResponseEntity<?> getAuditLogs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return ResponseEntity.ok(adminService.getAuditLogs(pageable));
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            return ResponseEntity.ok(adminService.getAuditLogs(pageable));
+        } catch (Exception e) {
+            return mongoUnavailable();
+        }
+    }
+
+    private ResponseEntity<?> mongoUnavailable() {
+        return ResponseEntity.status(503).body(Map.of(
+                "error", "MongoDB not available — start MongoDB or set MONGODB_URI.",
+                "errorMessage", "MongoDB not available — Admin requires a database connection."));
     }
 }

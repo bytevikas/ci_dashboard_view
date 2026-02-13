@@ -14,7 +14,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!sessionStorage.getItem('token'));
 
   const refreshUser = useCallback(async () => {
     const token = sessionStorage.getItem('token');
@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const { data, status } = await api<UserInfo>('/auth/me', { timeout: 8000 });
+      const { data, status } = await api<UserInfo>('/auth/me', { timeout: 5000 });
       if (status === 401 || !data) {
         sessionStorage.removeItem('token');
         setUser(null);
@@ -58,14 +58,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
-  // Stop loading after 10s if /auth/me never completes (e.g. backend down)
+  // Stop loading after 6s if /auth/me never completes (e.g. backend down)
   useEffect(() => {
     if (!loading) return;
     const t = setTimeout(() => {
       sessionStorage.removeItem('token');
       setUser(null);
       setLoading(false);
-    }, 10000);
+    }, 6000);
     return () => clearTimeout(t);
   }, [loading]);
 

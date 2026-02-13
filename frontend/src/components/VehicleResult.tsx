@@ -14,13 +14,13 @@ const SECTION_ICONS: Record<string, string> = {
 }
 
 const SECTION_STYLES: Record<string, { icon: string; header: string }> = {
-  owner: { icon: 'bg-pastelPurple text-primary', header: 'bg-pastelPurple/10' },
+  owner: { icon: 'bg-pastelBrand text-primary', header: 'bg-pastelBrand/10' },
   rc: { icon: 'bg-pastelGreen text-green-600', header: 'bg-pastelGreen/10' },
-  vehicle: { icon: 'bg-pastelBlue text-blue-600', header: 'bg-pastelBlue/10' },
+  vehicle: { icon: 'bg-pastelBlue text-teal-600', header: 'bg-pastelBlue/10' },
   insurance: { icon: 'bg-pastelOrange text-orange-600', header: 'bg-pastelOrange/10' },
   puc: { icon: 'bg-pastelGreen text-green-600', header: 'bg-pastelGreen/10' },
-  loan: { icon: 'bg-pastelPurple text-primary', header: 'bg-pastelPurple/10' },
-  permit: { icon: 'bg-pastelBlue text-blue-600', header: 'bg-pastelBlue/10' },
+  loan: { icon: 'bg-pastelBrand text-primary', header: 'bg-pastelBrand/10' },
+  permit: { icon: 'bg-pastelBlue text-teal-600', header: 'bg-pastelBlue/10' },
   other: { icon: 'bg-slate-100 text-slate-600', header: 'bg-slate-100' },
 }
 

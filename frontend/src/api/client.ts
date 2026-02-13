@@ -33,10 +33,10 @@ export async function api<T>(
     clearTimeout(timeoutId);
     if (err instanceof Error) {
       if (err.name === 'AbortError') {
-        return { status: 0, error: 'Request timeout - please check your connection and try again' };
+        return { status: 0, error: 'Request timed out. Check that the backend is running (default: http://localhost:8081) and try again.' };
       }
       if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-        return { status: 0, error: 'Network error - unable to connect to server' };
+        return { status: 0, error: 'Cannot reach the backend. Start it with: cd backend && mvn spring-boot:run (see RUN.md)' };
       }
       return { status: 0, error: `Connection error: ${err.message}` };
     }
@@ -67,12 +67,17 @@ export async function api<T>(
     error = 'Failed to read server response';
   }
 
-  if (!res.ok && !error) {
-    if (res.status === 401) error = 'Unauthorized';
-    else if (res.status === 429) error = 'Too many requests - please slow down';
-    else if (res.status === 500) error = 'Server error - the service is temporarily unavailable';
-    else if (res.status === 502 || res.status === 503 || res.status === 504) error = 'Service unavailable - please try again later';
-    else error = `Request failed (${res.status})`;
+  if (!res.ok) {
+    if (!error) {
+      if (res.status === 401) error = 'Unauthorized';
+      else if (res.status === 403) error = 'Forbidden - you do not have permission';
+      else if (res.status === 429) error = 'Too many requests - please slow down';
+      else if (res.status === 500) error = 'Server error - the service is temporarily unavailable';
+      else if (res.status === 502 || res.status === 503 || res.status === 504) error = 'Service unavailable - please try again later';
+      else error = `Request failed (${res.status})`;
+    }
+    // Don't return error response bodies as data — callers expect the success type
+    data = undefined;
   }
   return { data, status: res.status, error };
 }
@@ -94,4 +99,8 @@ export type VehicleSearchResponse = {
   errorMessage?: string;
 };
 
-export type RateLimitInfo = { remainingSearchesToday: number };
+export type RateLimitInfo = {
+  remainingSearchesToday: number;
+  dailyLimit: number;
+  adminConfigured: boolean;
+};

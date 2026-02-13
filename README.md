@@ -48,11 +48,11 @@ export FRONTEND_URL=http://localhost:3000
 mvn spring-boot:run
 ```
 
-- Server runs at **http://localhost:8080**, context path **/api**
+- Server runs at **http://localhost:8081** (default), context path **/api**
 - First login with `vikas.kumar8@cars24.com` creates the super admin user; other users must be added by admin and SSO enabled
 
 **Google OAuth**: In Google Cloud Console, create OAuth 2.0 credentials (Web application). Authorized redirect URI:  
-`http://localhost:8080/api/login/oauth2/code/google` (or your backend base + `/api/login/oauth2/code/google`).
+`http://localhost:8081/api/login/oauth2/code/google` (or your backend base + `/api/login/oauth2/code/google`).
 
 ## Frontend setup
 
@@ -63,7 +63,7 @@ npm run dev
 ```
 
 - App runs at **http://localhost:3000**
-- Vite proxies `/api` to `http://localhost:8080` so API calls and OAuth redirects work
+- Vite proxies `/api` to `http://localhost:8081` so API calls and OAuth redirects work
 
 **Login flow**: User clicks “Sign in with Google” → redirect to backend `/api/oauth2/authorization/google` → Google → backend callback → backend issues JWT and redirects to `http://localhost:3000/#token=...` → frontend stores token and uses it for API calls.
 
