@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api, VehicleSearchResponse } from '../api/client'
+import { api, VehicleSearchResponse, unmaskRegistrationNumber } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useSearch } from '../context/SearchContext'
 import VehicleResult from '../components/VehicleResult'
 import VehicleNoData from '../components/VehicleNoData'
+import SensitiveDataModal from '../components/SensitiveDataModal'
 import { trackSearch } from '../utils/ga'
 import { groupDataBySection, SectionId, SECTION_LABELS } from '../utils/vehicleSections'
 
@@ -17,6 +18,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [activeFilter, setActiveFilter] = useState<SectionId | 'all'>('all')
   const [fieldSearch, setFieldSearch] = useState('')
+  const [unmaskModalOpen, setUnmaskModalOpen] = useState(false)
+  const [unmaskLoading, setUnmaskLoading] = useState(false)
+  const [unmaskedRegNo, setUnmaskedRegNo] = useState<string | null>(null)
 
   const searchInFlightRef = useRef(false)
 
@@ -27,6 +31,7 @@ export default function Dashboard() {
       setSearchLoading(true)
       setLoading(true)
       setResult(null)
+      setUnmaskedRegNo(null)
       setSearchParams({ q: regNo.trim() })
       setRegistrationNumber(regNo.trim())
 
@@ -66,6 +71,34 @@ export default function Dashboard() {
       doSearch(initialQ)
     }
   }, [initialQ, doSearch, setRegistrationNumber])
+
+  const handleUnmaskContinue = useCallback(async () => {
+    // Use the original search query (not the masked response) for unmasking
+    const originalQuery = searchParams.get('q')
+    if (!originalQuery) return
+    setUnmaskLoading(true)
+    try {
+      const { data, error } = await unmaskRegistrationNumber(originalQuery)
+      if (data?.registrationNumber) {
+        setUnmaskedRegNo(data.registrationNumber)
+        // Also update the result data fields that contain the reg number
+        if (result?.data) {
+          const updatedData: Record<string, unknown> = { ...result.data }
+          for (const key of ['regNo', 'vehicleNumber']) {
+            if (key in updatedData) {
+              updatedData[key] = data.registrationNumber
+            }
+          }
+          setResult({ success: result.success, fromCache: result.fromCache, registrationNumber: result.registrationNumber, data: updatedData })
+        }
+      } else if (error) {
+        console.error('Unmask failed:', error)
+      }
+    } finally {
+      setUnmaskLoading(false)
+      setUnmaskModalOpen(false)
+    }
+  }, [result, searchParams])
 
   const sections = result?.data ? groupDataBySection(result.data as Record<string, unknown>) : {}
   const sectionIds = Object.keys(sections) as SectionId[]
@@ -112,10 +145,28 @@ export default function Dashboard() {
                   <span className="material-symbols-outlined text-primary text-2xl filled-icon">directions_car</span>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-slate-900">
-                    {result.registrationNumber}
+                  <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <span className={unmaskedRegNo ? '' : 'tracking-wider'}>
+                      {unmaskedRegNo ?? result.registrationNumber}
+                    </span>
+                    <button
+                      type="button"
+                      title={unmaskedRegNo ? 'Registration number revealed' : 'Reveal full registration number'}
+                      onClick={() => {
+                        if (!unmaskedRegNo) setUnmaskModalOpen(true)
+                      }}
+                      className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${
+                        unmaskedRegNo
+                          ? 'bg-green-100 text-green-600 cursor-default'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 cursor-pointer'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {unmaskedRegNo ? 'visibility' : 'visibility_off'}
+                      </span>
+                    </button>
                     {result.fromCache && (
-                      <span className="ml-2 text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">cached</span>
+                      <span className="ml-1 text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">cached</span>
                     )}
                   </h1>
                   <p className="text-sm text-slate-500">Vehicle Information</p>
@@ -127,6 +178,7 @@ export default function Dashboard() {
                   setResult(null)
                   setRegistrationNumber('')
                   setSearchParams({})
+                  setUnmaskedRegNo(null)
                 }}
                 className="px-4 py-2 bg-slate-100 text-slate-600 font-medium rounded-xl hover:bg-slate-200 transition-colors text-sm"
               >
@@ -225,6 +277,13 @@ export default function Dashboard() {
           <p className="text-sm text-slate-400">© Vehicle Health Dashboard</p>
         </div>
       </footer>
+
+      <SensitiveDataModal
+        open={unmaskModalOpen}
+        loading={unmaskLoading}
+        onContinue={handleUnmaskContinue}
+        onCancel={() => setUnmaskModalOpen(false)}
+      />
     </>
   )
 }

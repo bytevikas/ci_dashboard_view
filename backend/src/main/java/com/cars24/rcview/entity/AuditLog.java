@@ -71,6 +71,7 @@ public class AuditLog {
         SEARCH,
         API_CALL,
         CACHE_HIT,
+        UNMASK_REG_NUMBER,
         USER_LOGIN,
         USER_ADDED,
         USER_REMOVED,

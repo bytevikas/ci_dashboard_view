@@ -104,3 +104,21 @@ export type RateLimitInfo = {
   dailyLimit: number;
   adminConfigured: boolean;
 };
+
+export type UnmaskResponse = {
+  registrationNumber: string;
+};
+
+/**
+ * Unmask a registration number. This is an audited action – the user must
+ * acknowledge the sensitive-data warning before this is called.
+ */
+export async function unmaskRegistrationNumber(
+  registrationNumber: string
+): Promise<{ data?: UnmaskResponse; error?: string }> {
+  const { data, error } = await api<UnmaskResponse>('/vehicle/unmask', {
+    method: 'POST',
+    body: JSON.stringify({ registrationNumber }),
+  });
+  return { data, error };
+}

@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -106,8 +107,8 @@ public class VehicleSearchService {
                 return VehicleSearchResponse.builder()
                         .success(true)
                         .fromCache(true)
-                        .registrationNumber(normalized)
-                        .data(entry.data)
+                        .registrationNumber(maskRegNo(normalized))
+                        .data(maskDataFields(entry.data))
                         .build();
             }
         } else {
@@ -124,8 +125,8 @@ public class VehicleSearchService {
                 return VehicleSearchResponse.builder()
                         .success(true)
                         .fromCache(true)
-                        .registrationNumber(vc.getRegNoNormalized())
-                        .data(vc.getResponseData())
+                        .registrationNumber(maskRegNo(vc.getRegNoNormalized()))
+                        .data(maskDataFields(vc.getResponseData()))
                         .build();
             }
         }
@@ -193,9 +194,48 @@ public class VehicleSearchService {
         return VehicleSearchResponse.builder()
                 .success(true)
                 .fromCache(false)
-                .registrationNumber(normalized)
-                .data(dataMap)
+                .registrationNumber(maskRegNo(normalized))
+                .data(maskDataFields(dataMap))
                 .build();
+    }
+
+    /** Keys in the data map that contain registration numbers and should be masked. */
+    private static final Set<String> REG_NO_DATA_KEYS = Set.of("regNo", "vehicleNumber");
+
+    /**
+     * Masks a registration number, showing only the first 2 and last 2 characters.
+     * e.g. "MH12AB1234" → "MH******34"
+     */
+    static String maskRegNo(String regNo) {
+        if (regNo == null) return null;
+        String trimmed = regNo.trim();
+        if (trimmed.length() <= 4) return trimmed; // too short to mask meaningfully
+        return trimmed.substring(0, 2)
+                + "*".repeat(trimmed.length() - 4)
+                + trimmed.substring(trimmed.length() - 2);
+    }
+
+    /** Masks registration-number fields inside the data map. Returns a new map. */
+    private Map<String, Object> maskDataFields(Map<String, Object> data) {
+        if (data == null) return null;
+        Map<String, Object> masked = new HashMap<>(data);
+        for (String key : REG_NO_DATA_KEYS) {
+            Object val = masked.get(key);
+            if (val instanceof String s && !s.isBlank()) {
+                masked.put(key, maskRegNo(s));
+            }
+        }
+        return masked;
+    }
+
+    /**
+     * Returns the full (unmasked) registration number for the given normalized reg-no.
+     * Intended to be called from the unmask endpoint after the user acknowledges the sensitive-data warning.
+     */
+    public String unmask(String registrationNumber) {
+        String normalized = normalizeRegNo(registrationNumber);
+        if (normalized == null || normalized.isBlank()) return null;
+        return normalized;
     }
 
     private String normalizeRegNo(String regNo) {
