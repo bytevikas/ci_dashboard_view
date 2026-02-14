@@ -8,6 +8,8 @@ import com.cars24.rcview.repository.VehicleCacheRepository;
 import com.cars24.rcview.security.CustomOAuth2User;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,10 +19,13 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class VehicleSearchService {
+
+    private static final Logger log = LoggerFactory.getLogger(VehicleSearchService.class);
 
     private final VehicleCacheRepository cacheRepository;
     private final AuditLogRepository auditLogRepository;
@@ -106,8 +111,8 @@ public class VehicleSearchService {
                 return VehicleSearchResponse.builder()
                         .success(true)
                         .fromCache(true)
-                        .registrationNumber(normalized)
-                        .data(entry.data)
+                        .registrationNumber(maskRegNo(normalized))
+                        .data(maskDataFields(entry.data))
                         .build();
             }
         } else {
@@ -124,8 +129,8 @@ public class VehicleSearchService {
                 return VehicleSearchResponse.builder()
                         .success(true)
                         .fromCache(true)
-                        .registrationNumber(vc.getRegNoNormalized())
-                        .data(vc.getResponseData())
+                        .registrationNumber(maskRegNo(vc.getRegNoNormalized()))
+                        .data(maskDataFields(vc.getResponseData()))
                         .build();
             }
         }
@@ -193,9 +198,68 @@ public class VehicleSearchService {
         return VehicleSearchResponse.builder()
                 .success(true)
                 .fromCache(false)
-                .registrationNumber(normalized)
-                .data(dataMap)
+                .registrationNumber(maskRegNo(normalized))
+                .data(maskDataFields(dataMap))
                 .build();
+    }
+
+    /** Keys in the data map that contain registration numbers and should be masked. */
+    private static final Set<String> REG_NO_DATA_KEYS = Set.of("regNo", "vehicleNumber");
+
+    /**
+     * Masks a registration number, showing only the first 2 and last 2 characters.
+     * e.g. "MH12AB1234" → "MH******34"
+     */
+    static String maskRegNo(String regNo) {
+        if (regNo == null) return null;
+        String trimmed = regNo.trim();
+        if (trimmed.length() <= 4) return trimmed; // too short to mask meaningfully
+        return trimmed.substring(0, 2)
+                + "*".repeat(trimmed.length() - 4)
+                + trimmed.substring(trimmed.length() - 2);
+    }
+
+    /** Masks registration-number fields inside the data map. Returns a new map. */
+    private Map<String, Object> maskDataFields(Map<String, Object> data) {
+        if (data == null) return null;
+        Map<String, Object> masked = new HashMap<>(data);
+        for (String key : REG_NO_DATA_KEYS) {
+            Object val = masked.get(key);
+            if (val instanceof String s && !s.isBlank()) {
+                masked.put(key, maskRegNo(s));
+            }
+        }
+        return masked;
+    }
+
+    /**
+     * Returns the full (unmasked) registration number for the given normalized reg-no.
+     * Writes an audit log entry (skipped in dev mode). Never throws — returns null on failure.
+     */
+    public String unmask(String registrationNumber) {
+        String normalized = normalizeRegNo(registrationNumber);
+        if (normalized == null || normalized.isBlank()) return null;
+
+        // Audit the unmask action (skip DB write in dev mode)
+        if (!devMode) {
+            try {
+                String userId = getCurrentUserId();
+                String userEmail = getCurrentUserEmail();
+                auditLogRepository.save(AuditLog.builder()
+                        .userId(userId)
+                        .userEmail(userEmail)
+                        .action(AuditLog.AuditAction.UNMASK_REG_NUMBER)
+                        .registrationNumber(normalized)
+                        .details("User acknowledged sensitive-data warning and unmasked registration number")
+                        .createdAt(Instant.now())
+                        .build());
+            } catch (Exception e) {
+                // Don't let audit failure block the unmask response
+                log.warn("Failed to write unmask audit log for {}: {}", normalized, e.getMessage());
+            }
+        }
+
+        return normalized;
     }
 
     private String normalizeRegNo(String regNo) {

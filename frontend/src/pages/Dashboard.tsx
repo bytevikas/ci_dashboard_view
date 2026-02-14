@@ -1,12 +1,90 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api, VehicleSearchResponse } from '../api/client'
+import { api, VehicleSearchResponse, unmaskRegistrationNumber } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useSearch } from '../context/SearchContext'
 import VehicleResult from '../components/VehicleResult'
 import VehicleNoData from '../components/VehicleNoData'
+import SensitiveDataModal from '../components/SensitiveDataModal'
 import { trackSearch } from '../utils/ga'
 import { groupDataBySection, SectionId, SECTION_LABELS } from '../utils/vehicleSections'
+
+/** Strip technical jargon from error strings before they reach the UI. */
+function sanitizeError(raw: string | undefined): string {
+  if (!raw) return 'Something went wrong. Please try again.'
+  // Keep user-friendly messages as-is
+  const friendly = [
+    'too many requests', 'daily search limit', 'wait a moment',
+    'slow down', 'no data found', 'not found', 'unauthorized',
+  ]
+  const lower = raw.toLowerCase()
+  if (friendly.some((f) => lower.includes(f))) return raw
+
+  // Map known technical patterns to friendly messages
+  if (lower.includes('pkix') || lower.includes('certificate') || lower.includes('ssl'))
+    return 'Unable to connect securely to the vehicle data service. Please try again later.'
+  if (lower.includes('timed out') || lower.includes('timeout'))
+    return 'The request took too long. Please try again.'
+  if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('cannot reach'))
+    return 'Cannot reach the server. Please check your connection and try again.'
+  if (lower.includes('i/o error') || lower.includes('connection error'))
+    return 'A connection issue occurred while fetching vehicle data. Please try again.'
+  if (lower.includes('vahan api') || lower.includes('api key') || lower.includes('not set'))
+    return 'The vehicle lookup service is not available right now. Our team has been notified.'
+  if (lower.includes('server error') || lower.includes('unavailable'))
+    return 'The service is temporarily unavailable. Please try again in a few minutes.'
+
+  // Fallback — never leak raw backend strings
+  return 'Something went wrong while fetching vehicle data. Please try again shortly.'
+}
+
+/** Skeleton loader shown while search is in progress. */
+function SearchSkeleton() {
+  return (
+    <div className="animate-pulse">
+      {/* Title bar skeleton */}
+      <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-slate-200 rounded-xl" />
+          <div>
+            <div className="h-6 w-48 bg-slate-200 rounded-lg mb-2" />
+            <div className="h-4 w-32 bg-slate-100 rounded-lg" />
+          </div>
+        </div>
+        <div className="h-10 w-28 bg-slate-100 rounded-xl" />
+      </div>
+
+      {/* Filter pills skeleton */}
+      <div className="flex gap-2 mb-6">
+        {[80, 100, 90, 70, 60, 80].map((w, i) => (
+          <div key={i} className="h-9 rounded-lg bg-slate-100" style={{ width: w }} />
+        ))}
+      </div>
+
+      {/* Cards skeleton */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+              <div className="w-10 h-10 rounded-xl bg-slate-200" />
+              <div className="h-5 w-32 bg-slate-200 rounded-lg" />
+            </div>
+            <div className="divide-y divide-slate-100">
+              {[1, 2, 3].map((j) => (
+                <div key={j} className="flex items-center px-5 py-3 gap-4">
+                  <div className="w-1/3 h-4 bg-slate-100 rounded" />
+                  <div className="w-2/3 h-4 bg-slate-200 rounded" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-center text-sm text-slate-400 mt-8">Fetching vehicle details, this may take a moment...</p>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -17,8 +95,18 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [activeFilter, setActiveFilter] = useState<SectionId | 'all'>('all')
   const [fieldSearch, setFieldSearch] = useState('')
+  const [unmaskModalOpen, setUnmaskModalOpen] = useState(false)
+  const [unmaskLoading, setUnmaskLoading] = useState(false)
+  const [unmaskedRegNo, setUnmaskedRegNo] = useState<string | null>(null)
 
   const searchInFlightRef = useRef(false)
+
+  const resetSearch = useCallback(() => {
+    setResult(null)
+    setRegistrationNumber('')
+    setSearchParams({})
+    setUnmaskedRegNo(null)
+  }, [setRegistrationNumber, setSearchParams])
 
   const doSearch = useCallback(async (regNo: string) => {
     if (!regNo.trim() || searchInFlightRef.current) return
@@ -27,6 +115,7 @@ export default function Dashboard() {
       setSearchLoading(true)
       setLoading(true)
       setResult(null)
+      setUnmaskedRegNo(null)
       setSearchParams({ q: regNo.trim() })
       setRegistrationNumber(regNo.trim())
 
@@ -37,12 +126,20 @@ export default function Dashboard() {
       })
 
       if (data) {
-        setResult(data)
+        // If success=true but data payload is empty/null, treat as "no response"
+        if (data.success && (!data.data || Object.keys(data.data).length === 0)) {
+          setResult({
+            success: false,
+            errorMessage: 'No response received from the vehicle data service. Please try again.',
+          })
+        } else {
+          setResult(data)
+        }
         trackSearch(regNo.trim(), data.success, data.fromCache ?? false)
       } else {
         setResult({
           success: false,
-          errorMessage: error || (status === 429 ? 'Too many requests. Please try again later.' : 'Search failed.'),
+          errorMessage: sanitizeError(error || (status === 429 ? 'Too many requests. Please try again later.' : undefined)),
         })
         trackSearch(regNo.trim(), false, false)
       }
@@ -67,12 +164,41 @@ export default function Dashboard() {
     }
   }, [initialQ, doSearch, setRegistrationNumber])
 
+  const handleUnmaskContinue = useCallback(async () => {
+    // Use the original search query (not the masked response) for unmasking
+    const originalQuery = searchParams.get('q')
+    if (!originalQuery) return
+    setUnmaskLoading(true)
+    try {
+      const { data, error } = await unmaskRegistrationNumber(originalQuery)
+      if (data?.registrationNumber) {
+        setUnmaskedRegNo(data.registrationNumber)
+        // Also update the result data fields that contain the reg number
+        if (result?.data) {
+          const updatedData: Record<string, unknown> = { ...result.data }
+          for (const key of ['regNo', 'vehicleNumber']) {
+            if (key in updatedData) {
+              updatedData[key] = data.registrationNumber
+            }
+          }
+          setResult({ success: result.success, fromCache: result.fromCache, registrationNumber: result.registrationNumber, data: updatedData })
+        }
+      } else if (error) {
+        console.error('Unmask failed:', error)
+      }
+    } finally {
+      setUnmaskLoading(false)
+      setUnmaskModalOpen(false)
+    }
+  }, [result, searchParams])
+
   const sections = result?.data ? groupDataBySection(result.data as Record<string, unknown>) : {}
   const sectionIds = Object.keys(sections) as SectionId[]
 
   return (
     <>
       <section className="px-6 pt-10 pb-6 max-w-6xl mx-auto">
+        {/* Welcome hero – only when idle (no search, no loading) */}
         {!result && !loading && (
           <div className="relative overflow-hidden rounded-[3rem] bg-gradient-to-br from-indigo-50 to-purple-100 min-h-[400px] flex flex-col md:flex-row items-center px-8 md:px-16 py-12">
             <div className="flex-1 z-10 text-center md:text-left mb-10 md:mb-0">
@@ -93,18 +219,19 @@ export default function Dashboard() {
           </div>
         )}
 
-        {result && !result.success && (
+        {/* Loading skeleton */}
+        {loading && <SearchSkeleton />}
+
+        {/* Error / no-data state */}
+        {!loading && result && !result.success && (
           <VehicleNoData
-            message={result.errorMessage || 'No data found for this registration number.'}
-            onTryAgain={() => {
-              setResult(null)
-              setRegistrationNumber('')
-              setSearchParams({})
-            }}
+            message={result.errorMessage || 'No response received from the vehicle data service. Please try again.'}
+            onTryAgain={resetSearch}
           />
         )}
 
-        {result?.success && result.data && (
+        {/* Success with data */}
+        {!loading && result?.success && result.data && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-200">
               <div className="flex items-center gap-4">
@@ -112,10 +239,28 @@ export default function Dashboard() {
                   <span className="material-symbols-outlined text-primary text-2xl filled-icon">directions_car</span>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-slate-900">
-                    {result.registrationNumber}
+                  <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <span className={unmaskedRegNo ? '' : 'tracking-wider'}>
+                      {unmaskedRegNo ?? result.registrationNumber}
+                    </span>
+                    <button
+                      type="button"
+                      title={unmaskedRegNo ? 'Registration number revealed' : 'Reveal full registration number'}
+                      onClick={() => {
+                        if (!unmaskedRegNo) setUnmaskModalOpen(true)
+                      }}
+                      className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors ${
+                        unmaskedRegNo
+                          ? 'bg-green-100 text-green-600 cursor-default'
+                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 cursor-pointer'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-lg">
+                        {unmaskedRegNo ? 'visibility' : 'visibility_off'}
+                      </span>
+                    </button>
                     {result.fromCache && (
-                      <span className="ml-2 text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">cached</span>
+                      <span className="ml-1 text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">cached</span>
                     )}
                   </h1>
                   <p className="text-sm text-slate-500">Vehicle Information</p>
@@ -123,11 +268,7 @@ export default function Dashboard() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResult(null)
-                  setRegistrationNumber('')
-                  setSearchParams({})
-                }}
+                onClick={resetSearch}
                 className="px-4 py-2 bg-slate-100 text-slate-600 font-medium rounded-xl hover:bg-slate-200 transition-colors text-sm"
               >
                 <span className="material-symbols-outlined text-sm align-middle mr-1">search</span>
@@ -225,6 +366,13 @@ export default function Dashboard() {
           <p className="text-sm text-slate-400">© Vehicle Health Dashboard</p>
         </div>
       </footer>
+
+      <SensitiveDataModal
+        open={unmaskModalOpen}
+        loading={unmaskLoading}
+        onContinue={handleUnmaskContinue}
+        onCancel={() => setUnmaskModalOpen(false)}
+      />
     </>
   )
 }

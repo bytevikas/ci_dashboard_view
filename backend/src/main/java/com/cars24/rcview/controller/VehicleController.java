@@ -47,6 +47,28 @@ public class VehicleController {
         return ResponseEntity.ok(result);
     }
 
+    /**
+     * Unmask a registration number. This is an audited action – the user must
+     * have acknowledged the sensitive-data warning on the frontend before calling.
+     */
+    @PostMapping("/unmask")
+    public ResponseEntity<Map<String, String>> unmask(@RequestBody Map<String, String> body) {
+        if (userService.getCurrentUser() == null) {
+            return ResponseEntity.status(401).build();
+        }
+        String regNo = body != null ? body.get("registrationNumber") : null;
+        if (regNo == null || regNo.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "registrationNumber is required"));
+        }
+        String full = vehicleSearchService.unmask(regNo);
+        if (full == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Invalid registration number"));
+        }
+        return ResponseEntity.ok(Map.of("registrationNumber", full));
+    }
+
     @GetMapping("/rate-limit")
     public ResponseEntity<Map<String, Object>> rateLimitInfo() {
         var user = userService.getCurrentUser();
