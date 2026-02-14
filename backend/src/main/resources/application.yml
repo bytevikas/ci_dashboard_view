@@ -29,9 +29,12 @@ vahan:
     api-key: ${VAHAN_API_KEY:}
     max-age: 999
 
-# Dev mode: no Google SSO (use /api/dev/login), no audit logging, in-memory vehicle cache. MongoDB is still used for Admin (users + config).
+# Dev mode: no Google SSO (use /api/dev/login). In-memory fallbacks when DB is unavailable.
+# DEV_USE_DB=true  → dev mode + MongoDB (skips SSO but persists to DB)
+# DEV_USE_DB=false → dev mode + in-memory only (no DB needed at all)
 app:
   dev-mode: ${DEV_MODE:false}
+  dev-use-db: ${DEV_USE_DB:false}
   # App config (stored in DB; these are defaults)
   jwt:
     secret: ${JWT_SECRET:rcview-default-secret-key-min-256-bits-for-hs256-please-change-in-production-xyz}

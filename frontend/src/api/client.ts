@@ -109,6 +109,40 @@ export type UnmaskResponse = {
   registrationNumber: string;
 };
 
+// ── Admin search dashboard types ──────────────────────────────────────
+
+export type TopSearcher = {
+  email: string;
+  count: number;
+};
+
+export type SearchStats = {
+  totalSearches: number;
+  todaySearches: number;
+  uniqueUsers: number;
+  uniqueRegNumbers: number;
+  topSearchers: TopSearcher[];
+};
+
+export type SearchLogEntry = {
+  id: string;
+  userId: string;
+  userEmail: string;
+  registrationNumber: string;
+  details: string; // outcome: SUCCESS, CACHE_HIT, NO_DATA, API_ERROR, RATE_LIMITED, etc.
+  fromCache: boolean;
+  createdAt: string;
+};
+
+export type PagedSearchLogs = {
+  content: SearchLogEntry[];
+  totalElements: number;
+  totalPages: number;
+  number: number; // current page (0-based)
+  size: number;
+  last: boolean;
+};
+
 /**
  * Unmask a registration number. This is an audited action – the user must
  * acknowledge the sensitive-data warning before this is called.

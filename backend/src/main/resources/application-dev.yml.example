@@ -3,7 +3,7 @@ spring:
   data:
     mongodb:
       # Local: mongodb://localhost:27017/rcview
-      # Atlas: mongodb+srv://USER:PASSWORD@cluster.xxxxx.mongodb.net/rcview?retryWrites=true&w=majority&appName=ciView
+      # Atlas: get your connection string from MongoDB Atlas → Connect → Drivers
       uri: ${MONGODB_URI:mongodb://localhost:27017/rcview}
   security:
     oauth2:

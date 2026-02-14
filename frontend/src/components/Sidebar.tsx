@@ -25,7 +25,7 @@ export default function Sidebar() {
           <Link
             to="/admin"
             className={
-              location.pathname === '/admin' ? 'text-primary' : 'text-slate-400 hover:text-primary transition-colors'
+              location.pathname.startsWith('/admin') ? 'text-primary' : 'text-slate-400 hover:text-primary transition-colors'
             }
           >
             <span className="material-symbols-outlined text-2xl">admin_panel_settings</span>

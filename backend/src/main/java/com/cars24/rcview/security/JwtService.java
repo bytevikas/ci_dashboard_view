@@ -49,6 +49,9 @@ public class JwtService {
     @Value("${app.dev-mode:false}")
     private boolean devMode;
 
+    @Value("${app.dev-use-db:false}")
+    private boolean devUseDb;
+
     public String createToken(AppUser user) {
         SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         return Jwts.builder()
@@ -69,8 +72,9 @@ public class JwtService {
                     .parseSignedClaims(token)
                     .getPayload();
             String userId = claims.getSubject();
-            // In dev mode, skip MongoDB lookup and use token claims directly
-            if (devMode && claims.get("email") != null) {
+
+            // Dev mode without DB — use token claims directly, no MongoDB
+            if (devMode && !devUseDb && claims.get("email") != null) {
                 String roleStr = claims.get("role", String.class);
                 AppUser.Role role = roleStr != null ? AppUser.Role.valueOf(roleStr) : AppUser.Role.USER;
                 return AppUser.builder()
@@ -81,7 +85,8 @@ public class JwtService {
                         .ssoEnabled(true)
                         .build();
             }
-            // Production: short-lived cache to avoid MongoDB on every request
+
+            // MongoDB mode (production or dev+DB): short-lived cache to avoid MongoDB on every request
             CachedUser cached = userCache.get(token);
             if (cached != null) {
                 if (cached.isExpired()) {
@@ -94,6 +99,18 @@ public class JwtService {
             if (dbUser != null) {
                 userCache.put(token, new CachedUser(dbUser, USER_CACHE_TTL_MS));
                 return dbUser;
+            }
+            // Dev mode + DB: user might be the synthetic dev user (not in DB) — fall back to claims
+            if (devMode && claims.get("email") != null) {
+                String roleStr = claims.get("role", String.class);
+                AppUser.Role role = roleStr != null ? AppUser.Role.valueOf(roleStr) : AppUser.Role.USER;
+                return AppUser.builder()
+                        .id(userId)
+                        .email(String.valueOf(claims.get("email")))
+                        .name("Dev User")
+                        .role(role)
+                        .ssoEnabled(true)
+                        .build();
             }
             return null;
         } catch (Exception e) {

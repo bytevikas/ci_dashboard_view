@@ -51,12 +51,21 @@ public class AdminController {
     public ResponseEntity<?> addOrEnableUser(@RequestBody Map<String, Object> body) {
         String email = (String) body.get("email");
         String name = (String) body.get("name");
+        String roleStr = (String) body.get("role");
         boolean ssoEnabled = body.get("ssoEnabled") != null && (Boolean) body.get("ssoEnabled");
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "email is required"));
         }
+        AppUser.Role role = AppUser.Role.USER;
+        if (roleStr != null && !roleStr.isBlank()) {
+            try {
+                role = AppUser.Role.valueOf(roleStr.toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                // invalid role string → default to USER
+            }
+        }
         try {
-            AppUser user = adminService.addOrEnableUser(email, name, ssoEnabled);
+            AppUser user = adminService.addOrEnableUser(email, name, role, ssoEnabled);
             return ResponseEntity.ok(Map.of(
                     "id", user.getId(),
                     "email", user.getEmail(),
@@ -143,9 +152,30 @@ public class AdminController {
         }
     }
 
+    @GetMapping("/search-stats")
+    public ResponseEntity<?> getSearchStats() {
+        try {
+            return ResponseEntity.ok(adminService.getSearchStats());
+        } catch (Exception e) {
+            return mongoUnavailable();
+        }
+    }
+
+    @GetMapping("/search-logs")
+    public ResponseEntity<?> getSearchLogs(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            return ResponseEntity.ok(adminService.getSearchLogs(pageable));
+        } catch (Exception e) {
+            return mongoUnavailable();
+        }
+    }
+
     private ResponseEntity<?> mongoUnavailable() {
         return ResponseEntity.status(503).body(Map.of(
-                "error", "MongoDB not available — start MongoDB or set MONGODB_URI.",
-                "errorMessage", "MongoDB not available — Admin requires a database connection."));
+                "error", "Database is not reachable at the moment. Read-only data from in-memory store may still be available.",
+                "errorMessage", "Database is not reachable. Some features may be limited."));
     }
 }

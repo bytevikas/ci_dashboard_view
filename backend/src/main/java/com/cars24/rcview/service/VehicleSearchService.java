@@ -32,17 +32,27 @@ public class VehicleSearchService {
     private final VahanApiClient vahanApiClient;
     private final ConfigService configService;
     private final RateLimitService rateLimitService;
+    private final InMemoryAuditStore inMemoryAuditStore;
 
-    public VehicleSearchService(VehicleCacheRepository cacheRepository, AuditLogRepository auditLogRepository, VahanApiClient vahanApiClient, ConfigService configService, RateLimitService rateLimitService) {
+    public VehicleSearchService(VehicleCacheRepository cacheRepository, AuditLogRepository auditLogRepository,
+                                VahanApiClient vahanApiClient, ConfigService configService,
+                                RateLimitService rateLimitService, InMemoryAuditStore inMemoryAuditStore) {
         this.cacheRepository = cacheRepository;
         this.auditLogRepository = auditLogRepository;
         this.vahanApiClient = vahanApiClient;
         this.configService = configService;
         this.rateLimitService = rateLimitService;
+        this.inMemoryAuditStore = inMemoryAuditStore;
     }
 
     @Value("${app.dev-mode:false}")
     private boolean devMode;
+
+    @Value("${app.dev-use-db:false}")
+    private boolean devUseDb;
+
+    /** When true, skip MongoDB and use in-memory maps instead. */
+    private boolean useInMemory() { return devMode && !devUseDb; }
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, CachedEntry> devModeCache = new ConcurrentHashMap<>();
@@ -50,6 +60,32 @@ public class VehicleSearchService {
     private static class CachedEntry {
         Map<String, Object> data;
         Instant expiresAt;
+    }
+
+    // ── Canonical search audit logger ────────────────────────────────────
+    // Called on EVERY code path so the admin dashboard has full visibility.
+    // Always writes to in-memory store (for dev-mode admin dashboard).
+    // Also attempts MongoDB write; failures are silently logged.
+    private void logSearch(String userId, String userEmail, String regNo, String outcome, boolean fromCache) {
+        AuditLog entry = AuditLog.builder()
+                .userId(userId)
+                .userEmail(userEmail)
+                .action(AuditLog.AuditAction.SEARCH)
+                .registrationNumber(regNo)
+                .details(outcome)
+                .fromCache(fromCache)
+                .createdAt(Instant.now())
+                .build();
+
+        // Always store in memory so admin dashboard works even without MongoDB
+        inMemoryAuditStore.save(entry);
+
+        // Also persist to MongoDB (best-effort)
+        try {
+            auditLogRepository.save(entry);
+        } catch (Exception e) {
+            log.warn("Failed to persist search log for {}: {}", regNo, e.getMessage());
+        }
     }
 
     public VehicleSearchResponse search(String registrationNumber) {
@@ -62,17 +98,10 @@ public class VehicleSearchService {
                     .build();
         }
 
+        String normalized = normalizeRegNo(registrationNumber);
+
         if (!rateLimitService.allowRequest(userId)) {
-            if (!devMode) {
-                auditLogRepository.save(AuditLog.builder()
-                        .userId(userId)
-                        .userEmail(userEmail)
-                        .action(AuditLog.AuditAction.SEARCH)
-                        .registrationNumber(normalizeRegNo(registrationNumber))
-                        .details("RATE_LIMIT_PER_SECOND")
-                        .createdAt(Instant.now())
-                        .build());
-            }
+            logSearch(userId, userEmail, normalized, "RATE_LIMITED", false);
             return VehicleSearchResponse.builder()
                     .success(false)
                     .errorMessage("Too many requests. Please slow down.")
@@ -80,6 +109,7 @@ public class VehicleSearchService {
         }
 
         if (!rateLimitService.searchCooldownPassed(userId)) {
+            logSearch(userId, userEmail, normalized, "COOLDOWN", false);
             return VehicleSearchResponse.builder()
                     .success(false)
                     .errorMessage("Please wait a moment before searching again.")
@@ -87,13 +117,13 @@ public class VehicleSearchService {
         }
 
         if (!rateLimitService.withinDailyLimit(userId)) {
+            logSearch(userId, userEmail, normalized, "DAILY_LIMIT_REACHED", false);
             return VehicleSearchResponse.builder()
                     .success(false)
                     .errorMessage("Daily search limit reached. Try again tomorrow.")
                     .build();
         }
 
-        String normalized = normalizeRegNo(registrationNumber);
         if (normalized == null || normalized.isBlank()) {
             return VehicleSearchResponse.builder()
                     .success(false)
@@ -105,9 +135,11 @@ public class VehicleSearchService {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(ttlDays, ChronoUnit.DAYS);
 
-        if (devMode) {
+        // ── Cache lookup ─────────────────────────────────────────────────
+        if (useInMemory()) {
             CachedEntry entry = devModeCache.get(normalized);
             if (entry != null && entry.expiresAt.isAfter(now)) {
+                logSearch(userId, userEmail, normalized, "CACHE_HIT", true);
                 return VehicleSearchResponse.builder()
                         .success(true)
                         .fromCache(true)
@@ -119,13 +151,17 @@ public class VehicleSearchService {
             var cached = cacheRepository.findByRegNoNormalizedAndExpiresAtAfter(normalized, now);
             if (cached.isPresent()) {
                 VehicleCache vc = cached.get();
-                auditLogRepository.save(AuditLog.builder()
-                        .userId(userId)
-                        .userEmail(userEmail)
-                        .action(AuditLog.AuditAction.CACHE_HIT)
-                        .registrationNumber(normalized)
-                        .createdAt(now)
-                        .build());
+                // Keep existing CACHE_HIT action log for rate-limit counting
+                try {
+                    auditLogRepository.save(AuditLog.builder()
+                            .userId(userId).userEmail(userEmail)
+                            .action(AuditLog.AuditAction.CACHE_HIT)
+                            .registrationNumber(normalized)
+                            .createdAt(now).build());
+                } catch (Exception e) {
+                    log.warn("Failed to write CACHE_HIT audit: {}", e.getMessage());
+                }
+                logSearch(userId, userEmail, normalized, "CACHE_HIT", true);
                 return VehicleSearchResponse.builder()
                         .success(true)
                         .fromCache(true)
@@ -135,8 +171,10 @@ public class VehicleSearchService {
             }
         }
 
+        // ── External API call ────────────────────────────────────────────
         VahanSearchResult apiResult = vahanApiClient.search(registrationNumber.trim());
         if (apiResult.getErrorMessage() != null) {
+            logSearch(userId, userEmail, normalized, "API_ERROR", false);
             return VehicleSearchResponse.builder()
                     .success(false)
                     .fromCache(false)
@@ -145,16 +183,7 @@ public class VehicleSearchService {
                     .build();
         }
         if (apiResult.getData().isEmpty()) {
-            if (!devMode) {
-                auditLogRepository.save(AuditLog.builder()
-                        .userId(userId)
-                        .userEmail(userEmail)
-                        .action(AuditLog.AuditAction.SEARCH)
-                        .registrationNumber(normalized)
-                        .details("NO_DATA")
-                        .createdAt(now)
-                        .build());
-            }
+            logSearch(userId, userEmail, normalized, "NO_DATA", false);
             return VehicleSearchResponse.builder()
                     .success(false)
                     .fromCache(false)
@@ -164,7 +193,6 @@ public class VehicleSearchService {
         }
 
         JsonNode root = apiResult.getData().get();
-        // API returns data at root.data, not root.response.data
         JsonNode dataNode = root.path("data");
         if (dataNode.isMissingNode() || !dataNode.isObject()) {
             dataNode = root.path("response").path("data");
@@ -173,7 +201,8 @@ public class VehicleSearchService {
                 ? objectMapper.convertValue(dataNode, Map.class)
                 : new HashMap<>();
 
-        if (devMode) {
+        // ── Persist to cache ─────────────────────────────────────────────
+        if (useInMemory()) {
             CachedEntry entry = new CachedEntry();
             entry.data = dataMap;
             entry.expiresAt = expiresAt;
@@ -186,14 +215,19 @@ public class VehicleSearchService {
                     .expiresAt(expiresAt)
                     .build();
             cacheRepository.save(toSave);
-            auditLogRepository.save(AuditLog.builder()
-                    .userId(userId)
-                    .userEmail(userEmail)
-                    .action(AuditLog.AuditAction.API_CALL)
-                    .registrationNumber(normalized)
-                    .createdAt(now)
-                    .build());
+            // Keep existing API_CALL action log for rate-limit counting
+            try {
+                auditLogRepository.save(AuditLog.builder()
+                        .userId(userId).userEmail(userEmail)
+                        .action(AuditLog.AuditAction.API_CALL)
+                        .registrationNumber(normalized)
+                        .createdAt(now).build());
+            } catch (Exception e) {
+                log.warn("Failed to write API_CALL audit: {}", e.getMessage());
+            }
         }
+
+        logSearch(userId, userEmail, normalized, "SUCCESS", false);
 
         return VehicleSearchResponse.builder()
                 .success(true)
@@ -203,23 +237,19 @@ public class VehicleSearchService {
                 .build();
     }
 
-    /** Keys in the data map that contain registration numbers and should be masked. */
+    // ── Masking helpers ──────────────────────────────────────────────────
+
     private static final Set<String> REG_NO_DATA_KEYS = Set.of("regNo", "vehicleNumber");
 
-    /**
-     * Masks a registration number, showing only the first 2 and last 2 characters.
-     * e.g. "MH12AB1234" → "MH******34"
-     */
     static String maskRegNo(String regNo) {
         if (regNo == null) return null;
         String trimmed = regNo.trim();
-        if (trimmed.length() <= 4) return trimmed; // too short to mask meaningfully
+        if (trimmed.length() <= 4) return trimmed;
         return trimmed.substring(0, 2)
                 + "*".repeat(trimmed.length() - 4)
                 + trimmed.substring(trimmed.length() - 2);
     }
 
-    /** Masks registration-number fields inside the data map. Returns a new map. */
     private Map<String, Object> maskDataFields(Map<String, Object> data) {
         if (data == null) return null;
         Map<String, Object> masked = new HashMap<>(data);
@@ -240,23 +270,25 @@ public class VehicleSearchService {
         String normalized = normalizeRegNo(registrationNumber);
         if (normalized == null || normalized.isBlank()) return null;
 
-        // Audit the unmask action (skip DB write in dev mode)
-        if (!devMode) {
-            try {
-                String userId = getCurrentUserId();
-                String userEmail = getCurrentUserEmail();
-                auditLogRepository.save(AuditLog.builder()
-                        .userId(userId)
-                        .userEmail(userEmail)
-                        .action(AuditLog.AuditAction.UNMASK_REG_NUMBER)
-                        .registrationNumber(normalized)
-                        .details("User acknowledged sensitive-data warning and unmasked registration number")
-                        .createdAt(Instant.now())
-                        .build());
-            } catch (Exception e) {
-                // Don't let audit failure block the unmask response
-                log.warn("Failed to write unmask audit log for {}: {}", normalized, e.getMessage());
-            }
+        String userId = getCurrentUserId();
+        String userEmail = getCurrentUserEmail();
+        AuditLog entry = AuditLog.builder()
+                .userId(userId)
+                .userEmail(userEmail)
+                .action(AuditLog.AuditAction.UNMASK_REG_NUMBER)
+                .registrationNumber(normalized)
+                .details("User acknowledged sensitive-data warning and unmasked registration number")
+                .createdAt(Instant.now())
+                .build();
+
+        // Always store in memory
+        inMemoryAuditStore.save(entry);
+
+        // Persist to MongoDB (best-effort)
+        try {
+            auditLogRepository.save(entry);
+        } catch (Exception e) {
+            log.warn("Failed to write unmask audit log for {}: {}", normalized, e.getMessage());
         }
 
         return normalized;

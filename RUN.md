@@ -51,7 +51,7 @@ Use **Dev Mode** so you can run with only the **Vahan API key** (no Google OAuth
 |------|--------|--------|
 | **Vahan API key** (required for search) | Env: `VAHAN_API_KEY` or in `application.yml` under `vahan.api.api-key` | (your key) |
 | **Dev mode** (bypass SSO + DB logging) | Env: `DEV_MODE=true` or in `application.yml`: `app.dev-mode: true` | `export DEV_MODE=true` |
-| MongoDB (optional in dev mode for cache; app may still need it to start) | Env: `MONGODB_URI` or `application.yml` → `spring.data.mongodb.uri` | Local: `mongodb://localhost:27017/rcview`; Atlas: `mongodb+srv://user:pass@cluster.../rcview?retryWrites=true&w=majority&appName=ciView` |
+| MongoDB (optional in dev mode for cache; app may still need it to start) | Env: `MONGODB_URI` or `application.yml` → `spring.data.mongodb.uri` | Local: `mongodb://localhost:27017/rcview`; Atlas: see MongoDB Atlas dashboard for your connection string |
 
 **Minimal for dev:** set only **VAHAN_API_KEY** and **DEV_MODE=true**.  
 In `application.yml` you can set:
@@ -159,7 +159,7 @@ Run backend with:
 
 ```bash
 # MongoDB: use local URI or Atlas (include database name: .../rcview?...)
-export MONGODB_URI="mongodb+srv://user:password@cluster.xxxxx.mongodb.net/rcview?retryWrites=true&w=majority&appName=ciView"
+export MONGODB_URI="<your-atlas-connection-string>"   # get from MongoDB Atlas → Connect → Drivers
 export GOOGLE_CLIENT_ID=...
 export GOOGLE_CLIENT_SECRET=...
 export VAHAN_API_KEY=...

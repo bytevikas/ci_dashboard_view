@@ -5,7 +5,10 @@ import { SearchProvider } from './context/SearchContext'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Admin from './pages/Admin'
+import AdminLayout from './pages/admin/AdminLayout'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminConfig from './pages/admin/AdminConfig'
 
 function PrivateRoute({ children, adminOnly }: { children: React.ReactNode; adminOnly?: boolean }) {
   const { user, loading, setToken } = useAuth()
@@ -66,10 +69,14 @@ function App() {
           path="admin"
           element={
             <PrivateRoute adminOnly>
-              <Admin />
+              <AdminLayout />
             </PrivateRoute>
           }
-        />
+        >
+          <Route index element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="config" element={<AdminConfig />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useSearch } from '../context/SearchContext'
 import { useRecentSearches } from '../hooks/useRecentSearches'
@@ -7,10 +7,13 @@ import { useRecentSearches } from '../hooks/useRecentSearches'
 export default function Header() {
   const { registrationNumber, setRegistrationNumber, onSearch, searchLoading, remainingSearches, dailyLimit } = useSearch()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout } = useAuth()
   const { recentSearches, addSearch, removeSearch } = useRecentSearches()
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const isAdminPage = location.pathname.startsWith('/admin')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,6 +44,36 @@ export default function Header() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // ── Admin-page header (no search bar) ──────────────────────────────
+  if (isAdminPage) {
+    return (
+      <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-100 px-6 py-4">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="flex items-center gap-2 text-slate-500 hover:text-primary px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-sm font-medium"
+            >
+              <span className="material-symbols-outlined text-lg">arrow_back</span>
+              Back to Search
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-accent hover:bg-red-50 px-3 py-2 rounded-xl text-sm font-medium transition-colors"
+            title="Logout"
+          >
+            <span className="material-symbols-outlined text-base">logout</span>
+            Logout
+          </button>
+        </div>
+      </header>
+    )
+  }
+
+  // ── Search-page header ─────────────────────────────────────────────
   return (
     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-gray-100 px-6 py-4">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
