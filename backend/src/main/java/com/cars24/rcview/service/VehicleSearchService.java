@@ -8,6 +8,8 @@ import com.cars24.rcview.repository.VehicleCacheRepository;
 import com.cars24.rcview.security.CustomOAuth2User;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class VehicleSearchService {
+
+    private static final Logger log = LoggerFactory.getLogger(VehicleSearchService.class);
 
     private final VehicleCacheRepository cacheRepository;
     private final AuditLogRepository auditLogRepository;
@@ -230,11 +234,31 @@ public class VehicleSearchService {
 
     /**
      * Returns the full (unmasked) registration number for the given normalized reg-no.
-     * Intended to be called from the unmask endpoint after the user acknowledges the sensitive-data warning.
+     * Writes an audit log entry (skipped in dev mode). Never throws — returns null on failure.
      */
     public String unmask(String registrationNumber) {
         String normalized = normalizeRegNo(registrationNumber);
         if (normalized == null || normalized.isBlank()) return null;
+
+        // Audit the unmask action (skip DB write in dev mode)
+        if (!devMode) {
+            try {
+                String userId = getCurrentUserId();
+                String userEmail = getCurrentUserEmail();
+                auditLogRepository.save(AuditLog.builder()
+                        .userId(userId)
+                        .userEmail(userEmail)
+                        .action(AuditLog.AuditAction.UNMASK_REG_NUMBER)
+                        .registrationNumber(normalized)
+                        .details("User acknowledged sensitive-data warning and unmasked registration number")
+                        .createdAt(Instant.now())
+                        .build());
+            } catch (Exception e) {
+                // Don't let audit failure block the unmask response
+                log.warn("Failed to write unmask audit log for {}: {}", normalized, e.getMessage());
+            }
+        }
+
         return normalized;
     }
 

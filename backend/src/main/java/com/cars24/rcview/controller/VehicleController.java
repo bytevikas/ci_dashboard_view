@@ -1,10 +1,7 @@
 package com.cars24.rcview.controller;
 
 import com.cars24.rcview.dto.VehicleSearchResponse;
-import com.cars24.rcview.dto.UserInfoDto;
 import com.cars24.rcview.entity.AppConfig;
-import com.cars24.rcview.entity.AuditLog;
-import com.cars24.rcview.repository.AuditLogRepository;
 import com.cars24.rcview.service.ConfigService;
 import com.cars24.rcview.service.RateLimitService;
 import com.cars24.rcview.service.UserService;
@@ -12,7 +9,6 @@ import com.cars24.rcview.service.VehicleSearchService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.Map;
 
 @RestController
@@ -23,16 +19,13 @@ public class VehicleController {
     private final UserService userService;
     private final RateLimitService rateLimitService;
     private final ConfigService configService;
-    private final AuditLogRepository auditLogRepository;
 
     public VehicleController(VehicleSearchService vehicleSearchService, UserService userService,
-                             RateLimitService rateLimitService, ConfigService configService,
-                             AuditLogRepository auditLogRepository) {
+                             RateLimitService rateLimitService, ConfigService configService) {
         this.vehicleSearchService = vehicleSearchService;
         this.userService = userService;
         this.rateLimitService = rateLimitService;
         this.configService = configService;
-        this.auditLogRepository = auditLogRepository;
     }
 
     @PostMapping("/search")
@@ -60,8 +53,7 @@ public class VehicleController {
      */
     @PostMapping("/unmask")
     public ResponseEntity<Map<String, String>> unmask(@RequestBody Map<String, String> body) {
-        UserInfoDto currentUser = userService.getCurrentUser();
-        if (currentUser == null) {
+        if (userService.getCurrentUser() == null) {
             return ResponseEntity.status(401).build();
         }
         String regNo = body != null ? body.get("registrationNumber") : null;
@@ -74,15 +66,6 @@ public class VehicleController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "Invalid registration number"));
         }
-        // Audit log the unmask action
-        auditLogRepository.save(AuditLog.builder()
-                .userId(currentUser.getId())
-                .userEmail(currentUser.getEmail())
-                .action(AuditLog.AuditAction.UNMASK_REG_NUMBER)
-                .registrationNumber(full)
-                .details("User acknowledged sensitive-data warning and unmasked registration number")
-                .createdAt(Instant.now())
-                .build());
         return ResponseEntity.ok(Map.of("registrationNumber", full));
     }
 
